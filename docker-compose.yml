@@ -1,0 +1,64 @@
+services:
+  auth-service:
+    build:
+      context: ./auth-service
+    container_name: poc1_auth_service
+    environment:
+      - AUTH0_DOMAIN=${AUTH0_DOMAIN}
+      - AUTH0_AUDIENCE=${AUTH0_AUDIENCE}
+      - PORT=3001
+    networks:
+      - poc1_network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/auth/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  listing-service:
+    build:
+      context: ./listing-service
+    container_name: poc1_listing_service
+    volumes:
+      - listings_data:/data
+      - uploads_data:/app/uploads
+    environment:
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - PORT=3002
+    networks:
+      - poc1_network
+    depends_on:
+      auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - VITE_AUTH0_DOMAIN=${AUTH0_DOMAIN}
+        - VITE_AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID}
+        - VITE_AUTH0_AUDIENCE=${AUTH0_AUDIENCE}
+    container_name: poc1_frontend
+    ports:
+      - "8090:80"
+      - "8443:443"
+    networks:
+      - poc1_network
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      listing-service:
+        condition: service_healthy
+
+volumes:
+  listings_data:
+  uploads_data:
+
+networks:
+  poc1_network:
+    driver: bridge
